@@ -1,0 +1,130 @@
+---
+title: "Machine Learning"
+author: "David Kane"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(fs)
+library(gt)
+library(tidymodels)
+library(tidyverse)
+```
+
+
+## Predicting Democratic Votes
+
+
+```{r download, cache=TRUE}
+# Mostly the same code as Tuesday, but cleaned up. Do you understand what every
+# line does? If not, ask your partner!
+
+download.file(url = "https://github.com/TheUpshot/2018-live-poll-results/archive/master.zip",
+              destfile = "master.zip",
+              quiet = TRUE,
+              mode = "wb")
+
+unzip("master.zip")
+
+raw_data <- fs::dir_ls("2018-live-poll-results-master/data") %>%
+  map_dfr(read_csv, 
+          .id = "source", 
+          col_types = cols(.default = col_character(),
+                           turnout_scale = col_double(),
+                           turnout_score = col_double(),
+                           w_LV = col_double(),
+                           w_RV = col_double(),
+                           final_weight = col_double(),
+                           timestamp = col_datetime(format = "")
+                            ))
+
+file_delete(c("master.zip", "2018-live-poll-results-master"))
+
+```
+
+```{r clean}
+# Data is somewhat messy. Some of our functions require that the dependent
+# variable be a factor with two levels, rather than a simple 0/1 variable. Many
+# of the variables in the original data are missing for thousands of
+# observations.
+
+clean <- raw_data %>% 
+  mutate(dvote = as.factor(ifelse(response == "Dem", "Yes", "No"))) %>% 
+  mutate(gender = ifelse(gender == "Female", "Female", "Male")) %>% 
+  
+  mutate(party = case_when(partyid %in% c("Democrat", "Republican") ~ partyid,
+                           partyid == "Independent (No party)" ~ "Independent",
+                           TRUE ~ "Other")) %>% 
+  mutate(state = toupper(str_sub(source, 51, 52))) %>% 
+  mutate(office = case_when(str_detect(source, pattern = "sen") ~ "SEN",
+                            str_detect(source, pattern = "gov") ~ "GOV",
+                            TRUE ~ "HSE")) %>% 
+
+  
+  # Might add some other variables later, especially age, education, source.
+  
+  select(dvote, gender, party, office, state)
+
+```
+
+```{r make_a_model}
+# Make a model and then add predictions from that model back to the original
+# data. We need the predictions and the original data together so that we can
+# evaluate how well our model does. We create two sorts of predictions: the raw
+# probability, which is just on a 0--1 scale and the pred_dvote with is a two
+# level factor variable just like the original dvote.
+
+# All of this is relatively simple because there is only one independent
+# variable in the model and the dependent variable only has two levels.
+
+model_1 <- glm(data = clean, dvote ~ gender, family = "binomial")
+
+x_1 <- clean %>% 
+  mutate(prediction = predict(model_1, type = "response")) %>% 
+  mutate(pred_dvote = as.factor(ifelse(prediction > mean(prediction), "Yes", "No")))
+
+```
+
+### Model 1
+
+```{r}
+# How good is this model? How well does it predict using the input data we used
+# to make the model? What metrics might one use to discuss this? Use the
+# metrics() function from the yardstick package to answer this.
+
+metrics(x_1, truth = dvote, estimate = pred_dvote) %>% 
+  gt() %>% 
+    tab_header("Model 1 Evaluation on All Data")
+
+# Explain what row 2 means. Accurate prediction or not.
+
+# accuracy is the percentage of all predictions which are correct. kap is a
+# measure which normalizes based on how well dumb guessing might work. kap = 1
+# is perfect agreement. kap = 0 means no more agreement than we would expect by
+# chance.
+
+# Worth it to show exactly how these measures are calculated? Duplicate the
+# calculations by hand?
+
+```
+
+### Model 2
+
+```{r}
+# Build a fuller model with all variables and see how that compares.
+
+model_2 <- glm(data = clean, dvote ~ gender + party + state + office, family = "binomial")
+
+x_2 <- clean %>% 
+  mutate(prediction = predict(model_2, type = "response")) %>% 
+  mutate(pred_dvote = as.factor(ifelse(prediction > mean(prediction), "Yes", "No")))
+
+metrics(x_2, truth = dvote, estimate = pred_dvote) %>% 
+  gt() %>% 
+    tab_header("Model 2 Evaluation on All Data")
+
+# Much better! Repo before class.
+
+```
+
