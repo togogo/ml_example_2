@@ -107,7 +107,11 @@ metrics(x_1, truth = dvote, estimate = pred_dvote) %>%
 # Worth it to show exactly how these measures are calculated? Duplicate the
 # calculations by hand?
 
+
+Handy functions for today: initial_split(), logistic_reg(), set_engine(), fit(), predict(), bind_cols(), metrics() and vfold_cv().
+
 ```
+
 
 ### Model 2
 
@@ -128,3 +132,38 @@ metrics(x_2, truth = dvote, estimate = pred_dvote) %>%
 
 ```
 
+```{r}
+
+acc <- logistic_reg()%>%
+  set_engine(engine = "glm") %>%
+  fit(dvote ~ gender + party + state + office, data = clean) %>%
+  predict(new_data = clean) %>%
+  bind_cols(clean) %>%
+  metrics(truth = dvote, estimate = .pred_class) %>%
+  gt() %>%
+  tab_header("Model 2 Evaluation on All Data")
+
+#Handy functions for today: initial_split(), logistic_reg(), set_engine(), fit(), predict(), bind_cols(), metrics() and vfold_cv().
+
+```
+
+```{r}
+
+x_split <- initial_split(clean, prop = 0.01)
+
+sample_data <- training(x_split)
+
+#clean_cv <- vfold_cv(clean, v = 5)
+
+acc_split <- logistic_reg()%>%
+  set_engine(engine = "glm") %>%
+  fit(dvote ~ gender + party + state + office, data = sample_data) %>%
+  predict(new_data = sample_data) %>%
+  bind_cols(sample_data) %>%
+  metrics(truth = dvote, estimate = .pred_class) %>%
+  gt() %>%
+  tab_header("Model 2 Evaluation on All Data")
+
+
+
+```
